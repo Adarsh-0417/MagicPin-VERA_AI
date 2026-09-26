@@ -253,7 +253,8 @@ def tick(request: TickRequest):
     for trigger, score in ranked_triggers:
 
         result = decision_engine.evaluate(
-            trigger.context_id
+            trigger.context_id,
+            now=request.now
         )
 
         if result.action != "send":
