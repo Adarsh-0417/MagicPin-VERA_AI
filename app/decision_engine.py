@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 
 from app.context_resolver import CompositionContext, ContextResolver
@@ -6,11 +7,12 @@ from app.suppression import SuppressionLedger
 
 
 class DecisionResult:
+
     def __init__(
         self,
         action: str,
         rationale: str,
-        context: Optional[CompositionContext] = None,
+        context: Optional[CompositionContext] = None
     ):
         self.action = action
         self.rationale = rationale
@@ -23,37 +25,60 @@ class DecisionEngine:
         self,
         store: ContextStore,
         resolver: ContextResolver,
-        suppression: SuppressionLedger,
+        suppression: SuppressionLedger
     ):
         self.store = store
         self.resolver = resolver
         self.suppression = suppression
 
+    def _is_expired(
+        self,
+        expires_at: Optional[str],
+        now: Optional[str]
+    ) -> bool:
+
+        if not expires_at:
+            return False
+
+        try:
+            expiry = datetime.fromisoformat(
+                expires_at.replace("Z", "+00:00")
+            )
+
+            if now:
+                current_time = datetime.fromisoformat(
+                    now.replace("Z", "+00:00")
+                )
+            else:
+                current_time = datetime.now(timezone.utc)
+
+            return current_time >= expiry
+
+        except (ValueError, TypeError):
+            return False
+
     def evaluate(
         self,
         trigger_id: str,
+        now: Optional[str] = None
     ) -> DecisionResult:
-
-        # ----------------------------------------------------
-        # 1. Trigger exists?
-        # ----------------------------------------------------
 
         trigger = self.store.get(
             "trigger",
-            trigger_id,
+            trigger_id
         )
 
         if trigger is None:
             return DecisionResult(
-                action="wait",
-                rationale="Trigger context is unavailable.",
+                "wait",
+                "Trigger context is unavailable."
             )
 
         payload = trigger.payload
 
-        # ----------------------------------------------------
-        # 2. Suppression
-        # ----------------------------------------------------
+        # ---------------------------------------------------------
+        # 1. Suppression check
+        # ---------------------------------------------------------
 
         suppression_key = payload.get(
             "suppression_key"
@@ -66,18 +91,33 @@ class DecisionEngine:
             )
         ):
             return DecisionResult(
-                action="wait",
-                rationale=(
-                    "Trigger is suppressed because "
-                    "the same suppression key was already used."
-                ),
+                "wait",
+                "Trigger is suppressed because the same suppression key was already used."
             )
 
-        # ----------------------------------------------------
-        # 3. Resolve four-context composition
-        # ----------------------------------------------------
+        # ---------------------------------------------------------
+        # 2. Expiry check
+        # ---------------------------------------------------------
+
+        expires_at = payload.get(
+            "expires_at"
+        )
+
+        if self._is_expired(
+            expires_at,
+            now
+        ):
+            return DecisionResult(
+                "wait",
+                f"Trigger expired at {expires_at}."
+            )
+
+        # ---------------------------------------------------------
+        # 3. Resolve all required contexts
+        # ---------------------------------------------------------
 
         try:
+
             context = self.resolver.resolve_trigger(
                 trigger_id
             )
@@ -85,44 +125,42 @@ class DecisionEngine:
         except (KeyError, ValueError) as exc:
 
             return DecisionResult(
-                action="wait",
-                rationale=f"Required context unavailable: {exc}",
+                "wait",
+                f"Required context unavailable: {exc}"
             )
 
-        # ----------------------------------------------------
-        # 4. Customer-specific trigger validation
-        # ----------------------------------------------------
+        # ---------------------------------------------------------
+        # 4. Customer validation
+        # ---------------------------------------------------------
 
-        customer_id = payload.get("customer_id")
+        customer_id = payload.get(
+            "customer_id"
+        )
 
         if customer_id and context.customer is None:
+
             return DecisionResult(
-                action="wait",
-                rationale=(
-                    "Trigger requires customer context, "
-                    "but the customer context is unavailable."
-                ),
+                "wait",
+                "Trigger requires customer context, but the customer context is unavailable."
             )
 
-        # ----------------------------------------------------
-        # 5. Expiration
-        # ----------------------------------------------------
+        # ---------------------------------------------------------
+        # 5. Explicit expiry flag
+        # ---------------------------------------------------------
 
         if payload.get("expired") is True:
+
             return DecisionResult(
-                action="wait",
-                rationale="Trigger is explicitly expired.",
+                "wait",
+                "Trigger is explicitly expired."
             )
 
-        # ----------------------------------------------------
-        # 6. Basic eligibility
-        # ----------------------------------------------------
+        # ---------------------------------------------------------
+        # 6. Everything is valid
+        # ---------------------------------------------------------
 
         return DecisionResult(
-            action="send",
-            rationale=(
-                "Trigger is active, not suppressed, and "
-                "all required contexts are available."
-            ),
-            context=context,
+            "send",
+            "Trigger is active, not suppressed, not expired, and all required contexts are available.",
+            context
         )

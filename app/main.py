@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from time import monotonic
 from uuid import uuid4
+from app.composer import Composer
+from app.validator import ActionValidator
 from app.trigger_ranker import TriggerRanker
 from app.suppression import SuppressionLedger
 from app.decision_engine import DecisionEngine
@@ -41,6 +43,9 @@ START_TIME = monotonic()
 
 context_store = ContextStore()
 context_resolver = ContextResolver(context_store)
+
+composer = Composer()
+action_validator = ActionValidator()
 
 suppression_ledger = SuppressionLedger()
 
@@ -236,10 +241,7 @@ def receive_context(context: ContextPayload):
 # TICK
 # ============================================================
 
-@app.post(
-    "/v1/tick",
-    response_model=TickResponse,
-)
+@app.post("/v1/tick", response_model=TickResponse)
 def tick(request: TickRequest):
 
     ranked_triggers = trigger_ranker.rank(
@@ -247,9 +249,6 @@ def tick(request: TickRequest):
     )
 
     actions = []
-
-    # One proactive action per tick for now.
-    # We will refine this after testing against judge cases.
 
     for trigger, score in ranked_triggers:
 
@@ -265,44 +264,60 @@ def tick(request: TickRequest):
         trigger_payload = context.trigger.payload
         merchant_payload = context.merchant.payload
 
-        merchant_id = merchant_payload.get(
-            "merchant_id"
+        merchant_id = merchant_payload.get("merchant_id")
+        customer_id = trigger_payload.get("customer_id")
+
+        composed = composer.compose(context)
+
+        valid, validation_reason = action_validator.validate(
+            composed
         )
 
-        customer_id = trigger_payload.get(
-            "customer_id"
-        )
+        if not valid:
+            continue
 
-        conversation_id = (
-            f"conv_{trigger.context_id}"
-        )
+        conversation_id = f"conv_{trigger.context_id}"
 
         action = Action(
             conversation_id=conversation_id,
             merchant_id=merchant_id,
             customer_id=customer_id,
+
             send_as=(
                 "merchant_on_behalf"
                 if customer_id
                 else "vera"
             ),
+
             trigger_id=trigger.context_id,
-            template_name=None,
-            template_params=[],
-            body="",
-            cta="open_ended",
+
+            template_name=composed.get(
+                "template_name"
+            ),
+
+            template_params=composed.get(
+                "template_params",
+                []
+            ),
+
+            body=composed["body"],
+
+            cta=composed.get("cta"),
+
             suppression_key=trigger_payload.get(
                 "suppression_key"
             ),
+
             rationale=(
                 f"{result.rationale} "
-                f"Trigger score={score:.2f}."
+                f"Trigger score={score:.2f}. "
+                f"{composed['rationale']} "
+                f"Validation={validation_reason}."
             ),
         )
 
         actions.append(action)
 
-        # Record suppression immediately after selection.
         suppression_key = trigger_payload.get(
             "suppression_key"
         )
@@ -314,10 +329,7 @@ def tick(request: TickRequest):
 
         break
 
-    return TickResponse(
-        actions=actions
-    )
-
+    return TickResponse(actions=actions)
 # ============================================================
 # REPLY
 # ============================================================
