@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from time import monotonic
 from uuid import uuid4
+from app.reply_fsm import ReplyFSM
 from app.composer import Composer
 from app.validator import ActionValidator
 from app.trigger_ranker import TriggerRanker
@@ -48,6 +49,8 @@ composer = Composer()
 action_validator = ActionValidator()
 
 suppression_ledger = SuppressionLedger()
+
+reply_fsm = ReplyFSM()
 
 trigger_ranker = TriggerRanker(
     context_store
@@ -328,38 +331,29 @@ def tick(request: TickRequest):
                 suppression_key
             )
 
-        break
+        if len(actions) >= 20:
+            break
 
     return TickResponse(actions=actions)
 # ============================================================
 # REPLY
 # ============================================================
 
-@app.post(
-    "/v1/reply",
-    response_model=ReplyResponse,
-)
+@app.post("/v1/reply", response_model=ReplyResponse)
 def reply(request: ReplyRequest):
 
-    """
-    Conversation endpoint.
-
-    Current milestone:
-    safe WAIT response.
-
-    Conversation FSM and intent handling will be
-    connected here later.
-    """
-
-    return ReplyResponse(
-        action="wait",
-        wait_seconds=1800,
-        rationale=(
-            "Conversation policy is not enabled yet. "
-            "Waiting for the conversation engine."
-        ),
+    decision = reply_fsm.evaluate(
+        message=request.message,
+        turn_number=request.turn_number
     )
 
+    return ReplyResponse(
+        action=decision.action,
+        body=decision.body,
+        cta=decision.cta,
+        wait_seconds=decision.wait_seconds,
+        rationale=decision.rationale,
+    )
 
 # ============================================================
 # ROOT
