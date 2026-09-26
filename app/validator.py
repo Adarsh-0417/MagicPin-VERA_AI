@@ -2,28 +2,53 @@ class ActionValidator:
 
     MAX_BODY_LENGTH = 1000
 
-    def validate(self, result: dict) -> tuple[bool, str]:
+    FORBIDDEN_PHRASES = [
+        "guaranteed",
+        "100% guaranteed",
+        "password",
+        "otp",
+    ]
 
-        body = result.get("body", "").strip()
+    def validate(
+        self,
+        result: dict
+    ) -> tuple[bool, str]:
+
+        body = (
+            result.get("body", "")
+            .strip()
+        )
+
+        # ---------------------------------------------------------
+        # Empty message
+        # ---------------------------------------------------------
 
         if not body:
             return False, "Message body is empty."
 
-        if len(body) > self.MAX_BODY_LENGTH:
-            return False, "Message body exceeds maximum length."
+        # ---------------------------------------------------------
+        # Length
+        # ---------------------------------------------------------
 
-        forbidden_phrases = [
-            "guaranteed",
-            "100% guaranteed",
-            "fake",
-            "password",
-            "otp",
-        ]
+        if len(body) > self.MAX_BODY_LENGTH:
+            return (
+                False,
+                "Message body exceeds maximum length."
+            )
+
+        # ---------------------------------------------------------
+        # Forbidden content
+        # ---------------------------------------------------------
 
         body_lower = body.lower()
 
-        for phrase in forbidden_phrases:
+        for phrase in self.FORBIDDEN_PHRASES:
+
             if phrase in body_lower:
-                return False, f"Message contains forbidden phrase: {phrase}"
+
+                return (
+                    False,
+                    f"Message contains forbidden phrase: {phrase}"
+                )
 
         return True, "valid"
