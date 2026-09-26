@@ -40,6 +40,19 @@ START_TIME = monotonic()
 context_store = ContextStore()
 context_resolver = ContextResolver(context_store)
 
+# ============================================================
+# DATASET
+# ============================================================
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATASET_DIR = BASE_DIR / "dataset" / "expanded"
+
+dataset_loader = DatasetLoader(
+    dataset_dir=str(DATASET_DIR),
+    store=context_store,
+)
+
+DATASET_COUNTS = dataset_loader.load_all()
 
 # ============================================================
 # CONSTANTS
