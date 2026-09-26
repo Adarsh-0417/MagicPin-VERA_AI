@@ -158,8 +158,52 @@ def metadata():
 
 @app.post(
     "/v1/context",
-    response_model=ContextResponse,
+    response_model=ContextResponse
 )
+def upsert_context(
+    request: ContextPayload
+):
+    if request.scope not in VALID_SCOPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid scope: {request.scope}"
+        )
+
+    try:
+        result = context_store.upsert(request)
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "reason": "stale_version",
+                "details": str(exc),
+                "current_version": (
+                    context_store
+                    .get(
+                        request.scope,
+                        request.context_id
+                    )
+                    .version
+                )
+            }
+        )
+
+    stored = context_store.get(
+        request.scope,
+        request.context_id
+    )
+
+    return ContextResponse(
+        accepted=True,
+        ack_id=f"ack_{request.scope}_{request.context_id}_{stored.version}",
+        stored_at=datetime.now(
+            timezone.utc
+        ).isoformat(),
+        reason=result,
+        current_version=stored.version
+    )
 def receive_context(context: ContextPayload):
 
     # --------------------------------------------------------
