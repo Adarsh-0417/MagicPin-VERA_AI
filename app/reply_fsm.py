@@ -1,5 +1,7 @@
 from typing import Optional
 
+from app.conversation_store import ConversationState
+
 
 class ReplyDecision:
 
@@ -20,27 +22,28 @@ class ReplyDecision:
 
 class ReplyFSM:
 
-    OPT_OUT_WORDS = {
+    OPT_OUT_PHRASES = [
         "stop",
         "unsubscribe",
         "remove me",
         "don't message",
         "do not message",
-        "no more",
-    }
+        "no more messages",
+        "stop messaging",
+    ]
 
-    POSITIVE_WORDS = {
+    POSITIVE_PHRASES = [
         "yes",
         "haan",
         "sure",
         "okay",
         "ok",
         "interested",
-        "tell me",
+        "tell me more",
         "go ahead",
-        "send",
         "sounds good",
-    }
+        "send it",
+    ]
 
     QUESTION_WORDS = {
         "how",
@@ -53,110 +56,157 @@ class ReplyFSM:
         "price",
         "cost",
         "details",
+        "explain",
     }
+
+    NEGATIVE_PHRASES = [
+        "not interested",
+        "leave me alone",
+        "spam",
+        "annoying",
+        "don't want this",
+    ]
 
     def evaluate(
         self,
         message: str,
-        turn_number: Optional[int] = None
+        conversation: Optional[ConversationState] = None
     ) -> ReplyDecision:
 
         text = message.strip().lower()
 
         if not text:
+
             return ReplyDecision(
                 action="wait",
                 wait_seconds=1800,
                 rationale="Empty message received."
             )
 
-        # -----------------------------------------
-        # Opt-out / stop
-        # -----------------------------------------
+        # --------------------------------------------------
+        # Already ended
+        # --------------------------------------------------
 
-        for phrase in self.OPT_OUT_WORDS:
+        if conversation and conversation.ended:
+
+            return ReplyDecision(
+                action="end",
+                rationale="Conversation has already been ended."
+            )
+
+        # --------------------------------------------------
+        # Explicit opt-out
+        # --------------------------------------------------
+
+        for phrase in self.OPT_OUT_PHRASES:
 
             if phrase in text:
 
                 return ReplyDecision(
                     action="end",
-                    body="Understood. We won't send further messages in this conversation.",
-                    rationale="Merchant/customer explicitly requested no further messages."
+                    body=(
+                        "Understood. We won't send "
+                        "further messages in this conversation."
+                    ),
+                    rationale=(
+                        "Explicit opt-out detected."
+                    )
                 )
 
-        # -----------------------------------------
-        # Positive intent
-        # -----------------------------------------
+        # --------------------------------------------------
+        # Negative / hostile
+        # --------------------------------------------------
 
-        for phrase in self.POSITIVE_WORDS:
+        for phrase in self.NEGATIVE_PHRASES:
 
             if phrase in text:
+
+                return ReplyDecision(
+                    action="end",
+                    body=(
+                        "Understood. We won't continue "
+                        "this conversation."
+                    ),
+                    rationale=(
+                        "Negative intent detected."
+                    )
+                )
+
+        # --------------------------------------------------
+        # Positive intent
+        # --------------------------------------------------
+
+        for phrase in self.POSITIVE_PHRASES:
+
+            if phrase in text:
+
+                if conversation and conversation.last_trigger_id:
+
+                    return ReplyDecision(
+                        action="send",
+                        body=(
+                            "Absolutely. Let's take this "
+                            "forward. I can help you with the "
+                            "next steps related to this update."
+                        ),
+                        cta="Continue",
+                        rationale=(
+                            "Positive intent detected with "
+                            "an active trigger context."
+                        )
+                    )
 
                 return ReplyDecision(
                     action="send",
                     body=(
                         "Absolutely. I can help with that. "
-                        "Tell me what you'd like to explore and we'll take it from there."
+                        "What would you like to explore?"
                     ),
                     cta="Continue",
-                    rationale="Positive intent detected from the incoming message."
+                    rationale=(
+                        "Positive intent detected."
+                    )
                 )
 
-        # -----------------------------------------
-        # Question / information request
-        # -----------------------------------------
+        # --------------------------------------------------
+        # Questions
+        # --------------------------------------------------
 
-        words = set(text.replace("?", "").split())
+        words = set(
+            text.replace("?", "").split()
+        )
 
-        if "?" in text or words.intersection(
-            self.QUESTION_WORDS
+        if (
+            "?" in text
+            or words.intersection(
+                self.QUESTION_WORDS
+            )
         ):
 
             return ReplyDecision(
                 action="send",
                 body=(
-                    "Good question. I can help you work through the relevant "
-                    "details for your business. What specific part would you "
-                    "like to know more about?"
+                    "Happy to explain. Tell me which "
+                    "part you'd like more details on, "
+                    "and I'll keep it specific to "
+                    "your business."
                 ),
                 cta="Continue",
-                rationale="Information-seeking intent detected."
+                rationale=(
+                    "Information-seeking intent detected."
+                )
             )
 
-        # -----------------------------------------
-        # Hostile / negative response
-        # -----------------------------------------
-
-        negative_words = {
-            "no",
-            "not interested",
-            "leave me alone",
-            "annoying",
-            "spam",
-            "stop messaging",
-        }
-
-        for phrase in negative_words:
-
-            if phrase in text:
-
-                return ReplyDecision(
-                    action="end",
-                    body=(
-                        "Understood. We won't continue this conversation."
-                    ),
-                    rationale="Negative or hostile intent detected."
-                )
-
-        # -----------------------------------------
-        # Default
-        # -----------------------------------------
+        # --------------------------------------------------
+        # Ambiguous
+        # --------------------------------------------------
 
         return ReplyDecision(
             action="wait",
             wait_seconds=1800,
             rationale=(
-                "Intent was ambiguous, so the system waits "
-                "rather than sending an unnecessary message."
+                "Intent was ambiguous, so the system "
+                "waits instead of sending unnecessary "
+                "messages."
             )
         )
