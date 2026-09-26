@@ -46,4 +46,4 @@ class ReplyResponse(BaseModel):
     action: str
     rationale: str
     message: Optional[Dict[str, Any]] = None
-    wait_seconds: Optional[int] = None
+    wait_seconds: Optional[int] = None   
