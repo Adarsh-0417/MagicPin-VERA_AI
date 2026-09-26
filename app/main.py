@@ -355,7 +355,10 @@ def tick(request: TickRequest):
 # REPLY
 # ============================================================
 
-@app.post("/v1/reply", response_model=ReplyResponse)
+@app.post(
+    "/v1/reply",
+    response_model=ReplyResponse
+)
 def reply(request: ReplyRequest):
 
     conversation = conversation_store.get_or_create(
@@ -364,15 +367,17 @@ def reply(request: ReplyRequest):
         customer_id=request.customer_id
     )
 
-    decision = reply_fsm.evaluate(
-        message=request.message,
-        conversation=conversation
-    )
-
-    conversation_store.add_message(
+    # Store incoming message BEFORE FSM evaluation
+    # so repeated-message detection sees the current turn.
+    conversation = conversation_store.add_message(
         conversation_id=request.conversation_id,
         role=request.from_role,
         message=request.message
+    )
+
+    decision = reply_fsm.evaluate(
+        message=request.message,
+        conversation=conversation
     )
 
     if decision.action == "end":
@@ -386,7 +391,7 @@ def reply(request: ReplyRequest):
         body=decision.body,
         cta=decision.cta,
         wait_seconds=decision.wait_seconds,
-        rationale=decision.rationale,
+        rationale=decision.rationale
     )
 # ============================================================
 # ROOT

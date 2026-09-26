@@ -48,7 +48,6 @@ class FactsExtractor:
         )
 
         return {
-
             "category": {
                 "slug": category.get(
                     "slug"
@@ -70,28 +69,37 @@ class FactsExtractor:
                 ),
 
                 "name": (
-                    merchant_identity.get(
-                        "name"
-                    )
+                    merchant_identity.get("name")
                     or merchant.get("name")
                 ),
 
+                "owner_first_name": (
+                    merchant_identity.get("owner_first_name")
+                    or ""
+                ),
+
                 "city": (
-                    merchant_identity.get(
-                        "city"
-                    )
+                    merchant_identity.get("city")
                     or merchant.get("city")
                 ),
 
+                "locality": (
+                    merchant_identity.get("locality")
+                    or ""
+                ),
+
                 "rating": (
-                    merchant_performance.get(
-                        "rating"
-                    )
+                    merchant_performance.get("rating")
                     or merchant.get("rating")
                 ),
 
                 "avg_order_value": merchant.get(
                     "avg_order_value"
+                ),
+
+                "offers": merchant.get(
+                    "offers",
+                    []
                 ),
 
                 "identity": merchant_identity,
@@ -154,7 +162,6 @@ class FactsExtractor:
             },
 
             "customer": {
-
                 "customer_id": customer.get(
                     "customer_id"
                 ),
@@ -164,7 +171,8 @@ class FactsExtractor:
                 ),
 
                 "language_pref": customer_identity.get(
-                    "language_pref"
+                    "language_pref",
+                    "en"
                 ),
 
                 "visits_total": customer_relationship.get(

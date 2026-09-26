@@ -1,17 +1,12 @@
-from typing import Optional
-
-from app.conversation_store import ConversationState
-
-
 class ReplyDecision:
 
     def __init__(
         self,
-        action: str,
-        body: Optional[str] = None,
-        cta: Optional[str] = None,
-        wait_seconds: Optional[int] = None,
-        rationale: str = ""
+        action,
+        body=None,
+        cta=None,
+        wait_seconds=None,
+        rationale=""
     ):
         self.action = action
         self.body = body
@@ -29,7 +24,7 @@ class ReplyFSM:
         "don't message",
         "do not message",
         "no more messages",
-        "stop messaging",
+        "stop messaging"
     ]
 
     POSITIVE_PHRASES = [
@@ -43,6 +38,10 @@ class ReplyFSM:
         "go ahead",
         "sounds good",
         "send it",
+        "let's do it",
+        "lets do it",
+        "what's next",
+        "whats next"
     ]
 
     QUESTION_WORDS = {
@@ -56,7 +55,7 @@ class ReplyFSM:
         "price",
         "cost",
         "details",
-        "explain",
+        "explain"
     }
 
     NEGATIVE_PHRASES = [
@@ -64,90 +63,162 @@ class ReplyFSM:
         "leave me alone",
         "spam",
         "annoying",
-        "don't want this",
+        "don't want this"
     ]
+
+    AUTO_REPLY_MARKERS = [
+        "thank you for contacting",
+        "thanks for contacting",
+        "our team will respond",
+        "our team will get back",
+        "we will respond shortly",
+        "we'll respond shortly",
+        "will respond shortly",
+        "will get back to you",
+        "we'll get back to you",
+        "automated response",
+        "automatic response",
+        "currently unavailable",
+        "office hours",
+        "we are currently away"
+    ]
+
+    def _looks_like_auto_reply(
+        self,
+        text: str
+    ) -> bool:
+
+        return any(
+            marker in text
+            for marker in self.AUTO_REPLY_MARKERS
+        )
 
     def evaluate(
         self,
-        message: str,
-        conversation: Optional[ConversationState] = None
-    ) -> ReplyDecision:
+        message,
+        conversation=None
+    ):
 
         text = message.strip().lower()
 
         if not text:
 
             return ReplyDecision(
-                action="wait",
+                "wait",
                 wait_seconds=1800,
                 rationale="Empty message received."
             )
 
-        # --------------------------------------------------
-        # Already ended
-        # --------------------------------------------------
-
         if conversation and conversation.ended:
 
             return ReplyDecision(
-                action="end",
+                "end",
                 rationale="Conversation has already been ended."
             )
 
-        # --------------------------------------------------
-        # Explicit opt-out
-        # --------------------------------------------------
+        # -----------------------------------------
+        # AUTO-REPLY HANDLING
+        # -----------------------------------------
+
+        if self._looks_like_auto_reply(text):
+
+            repeat_count = (
+                conversation.same_incoming_count
+                if conversation
+                else 1
+            )
+
+            # First identical auto-reply
+            if repeat_count == 1:
+
+                return ReplyDecision(
+                    "send",
+                    body=(
+                        "Looks like an auto-reply 😊 "
+                        "When the owner sees this, just reply "
+                        "'Yes' for the update."
+                    ),
+                    cta="yes_no",
+                    rationale=(
+                        "Canned auto-reply detected for the first time. "
+                        "The system sends one gentle follow-up."
+                    )
+                )
+
+            # Second identical auto-reply
+            if repeat_count == 2:
+
+                return ReplyDecision(
+                    "wait",
+                    wait_seconds=86400,
+                    rationale=(
+                        "The same auto-reply was received twice. "
+                        "The system waits 24 hours instead of sending again."
+                    )
+                )
+
+            # Third identical auto-reply
+            return ReplyDecision(
+                "end",
+                rationale=(
+                    "The same auto-reply was received repeatedly. "
+                    "The system ends the conversation to avoid message spam."
+                )
+            )
+
+        # -----------------------------------------
+        # OPT OUT
+        # -----------------------------------------
 
         for phrase in self.OPT_OUT_PHRASES:
 
             if phrase in text:
 
                 return ReplyDecision(
-                    action="end",
+                    "end",
                     body=(
-                        "Understood. We won't send "
-                        "further messages in this conversation."
+                        "Understood. We won't send further "
+                        "messages in this conversation."
                     ),
-                    rationale=(
-                        "Explicit opt-out detected."
-                    )
+                    rationale="Explicit opt-out detected."
                 )
 
-        # --------------------------------------------------
-        # Negative / hostile
-        # --------------------------------------------------
+        # -----------------------------------------
+        # NEGATIVE INTENT
+        # -----------------------------------------
 
         for phrase in self.NEGATIVE_PHRASES:
 
             if phrase in text:
 
                 return ReplyDecision(
-                    action="end",
+                    "end",
                     body=(
                         "Understood. We won't continue "
                         "this conversation."
                     ),
-                    rationale=(
-                        "Negative intent detected."
-                    )
+                    rationale="Negative intent detected."
                 )
 
-        # --------------------------------------------------
-        # Positive intent
-        # --------------------------------------------------
+        # -----------------------------------------
+        # POSITIVE INTENT
+        # -----------------------------------------
 
         for phrase in self.POSITIVE_PHRASES:
 
             if phrase in text:
 
-                if conversation and conversation.last_trigger_id:
+                if (
+                    conversation
+                    and conversation.last_trigger_id
+                ):
 
                     return ReplyDecision(
-                        action="send",
+                        "send",
                         body=(
-                            "Absolutely. Let's take this "
-                            "forward. I can help you with the "
-                            "next steps related to this update."
+                            "Absolutely. Let's take this forward. "
+                            "I can help you with the next steps "
+                            "related to this update."
                         ),
                         cta="Continue",
                         rationale=(
@@ -157,20 +228,18 @@ class ReplyFSM:
                     )
 
                 return ReplyDecision(
-                    action="send",
+                    "send",
                     body=(
                         "Absolutely. I can help with that. "
                         "What would you like to explore?"
                     ),
                     cta="Continue",
-                    rationale=(
-                        "Positive intent detected."
-                    )
+                    rationale="Positive intent detected."
                 )
 
-        # --------------------------------------------------
-        # Questions
-        # --------------------------------------------------
+        # -----------------------------------------
+        # QUESTION / INFORMATION SEEKING
+        # -----------------------------------------
 
         words = set(
             text.replace("?", "").split()
@@ -184,12 +253,11 @@ class ReplyFSM:
         ):
 
             return ReplyDecision(
-                action="send",
+                "send",
                 body=(
-                    "Happy to explain. Tell me which "
-                    "part you'd like more details on, "
-                    "and I'll keep it specific to "
-                    "your business."
+                    "Happy to explain. Tell me which part "
+                    "you'd like more details on, and I'll "
+                    "keep it specific to your business."
                 ),
                 cta="Continue",
                 rationale=(
@@ -197,16 +265,15 @@ class ReplyFSM:
                 )
             )
 
-        # --------------------------------------------------
-        # Ambiguous
-        # --------------------------------------------------
+        # -----------------------------------------
+        # AMBIGUOUS
+        # -----------------------------------------
 
         return ReplyDecision(
-            action="wait",
+            "wait",
             wait_seconds=1800,
             rationale=(
-                "Intent was ambiguous, so the system "
-                "waits instead of sending unnecessary "
-                "messages."
+                "Intent was ambiguous, so the system waits "
+                "instead of sending unnecessary messages."
             )
         )

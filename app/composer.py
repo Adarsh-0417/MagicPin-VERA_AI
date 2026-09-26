@@ -11,20 +11,49 @@ class Composer:
     def __init__(self):
         self.facts_extractor = FactsExtractor()
 
-    def _safe(
-        self,
-        value,
-        fallback=""
-    ):
+    def _safe(self, value, fallback=""):
         if value is None:
             return fallback
 
         return str(value).strip()
 
-    def compose(
-        self,
-        context: CompositionContext
-    ) -> dict:
+    def _active_offer(self, merchant):
+        offers = merchant.get("offers", [])
+
+        for offer in offers:
+
+            if not isinstance(offer, dict):
+                continue
+
+            status = str(
+                offer.get("status", "")
+            ).lower()
+
+            if status == "active":
+                return offer
+
+        return None
+
+    def _offer_text(self, offer):
+        if not offer:
+            return ""
+
+        title = (
+            offer.get("title")
+            or offer.get("name")
+        )
+
+        price = offer.get("price")
+
+        if title and price:
+            return f"{title} @ ₹{price}"
+
+        if title:
+            return str(title)
+
+        return ""
+
+    def compose(self, context: CompositionContext) -> dict:
 
         facts = self.facts_extractor.extract(
             context
@@ -47,20 +76,12 @@ class Composer:
 
         merchant_name = self._safe(
             merchant.get("name"),
-            "there"
+            "the business"
         )
 
         trigger_kind = self._safe(
             trigger.get("kind"),
             "general_update"
-        )
-
-        title = self._safe(
-            trigger.get("title")
-        )
-
-        description = self._safe(
-            trigger.get("description")
         )
 
         playbook = get_category_playbook(
@@ -72,7 +93,7 @@ class Composer:
         )
 
         # ======================================================
-        # CUSTOMER-SCOPED RECALL
+        # CUSTOMER RECALL
         # ======================================================
 
         if (
@@ -85,20 +106,19 @@ class Composer:
                 "there"
             )
 
-            last_service = self._safe(
-                trigger.get(
-                    "last_service_date"
-                )
-                or customer.get(
-                    "last_visit"
-                )
-            )
+            language = self._safe(
+                customer.get("language_pref"),
+                "en"
+            ).lower()
 
             service_due = self._safe(
-                trigger.get(
-                    "service_due"
-                ),
-                "scheduled service"
+                trigger.get("service_due"),
+                "service"
+            )
+
+            last_service = self._safe(
+                trigger.get("last_service_date")
+                or customer.get("last_visit")
             )
 
             slots = trigger.get(
@@ -106,55 +126,140 @@ class Composer:
                 []
             )
 
-            slot_text = ""
+            slot_labels = []
 
-            if slots:
+            for slot in slots[:2]:
 
-                labels = []
+                if isinstance(slot, dict):
 
-                for slot in slots[:2]:
-
-                    if isinstance(
-                        slot,
-                        dict
-                    ):
-
-                        label = slot.get(
-                            "label"
-                        )
-
-                        if label:
-                            labels.append(
-                                label
-                            )
-
-                if labels:
-
-                    slot_text = (
-                        " Available slots: "
-                        + " or ".join(labels)
-                        + "."
+                    label = slot.get(
+                        "label"
                     )
 
-            body = (
-                f"Hi {customer_name}, "
-                f"{merchant_name}'s clinic here. "
-                f"Your {service_due.replace('_', ' ')} "
-                f"is due."
-            )
+                    if label:
+                        slot_labels.append(
+                            label
+                        )
 
-            if last_service:
+            slot_text = ""
 
-                body += (
-                    f" Your last service was "
-                    f"{last_service}."
+            if slot_labels:
+
+                slot_text = (
+                    " | ".join(slot_labels)
                 )
 
-            body += slot_text
+            offer = self._active_offer(
+                merchant
+            )
 
-            body += (
-                " Reply with the slot that works "
-                "for you, or tell us a convenient time."
+            offer_text = self._offer_text(
+                offer
+            )
+
+            # ----------------------------------------------
+            # English
+            # ----------------------------------------------
+
+            if language == "en":
+
+                body = (
+                    f"Hi {customer_name}, "
+                    f"{merchant_name} here. "
+                    f"Your {service_due.replace('_', ' ')} "
+                    f"recall is due."
+                )
+
+                if last_service:
+
+                    body += (
+                        f" Your last service was "
+                        f"{last_service}."
+                    )
+
+                if slot_text:
+
+                    body += (
+                        f" Available slots: "
+                        f"{slot_text}."
+                    )
+
+                if offer_text:
+
+                    body += (
+                        f" {offer_text} is currently available."
+                    )
+
+                body += (
+                    " Reply with 1 or 2 for a slot, "
+                    "or tell us a time that works."
+                )
+
+            # ----------------------------------------------
+            # Hindi-English mix
+            # ----------------------------------------------
+
+            elif "hi-en" in language or language == "hi":
+
+                body = (
+                    f"Hi {customer_name}, "
+                    f"{merchant_name} here 🦷 "
+                    f"Apka {service_due.replace('_', ' ')} "
+                    f"recall due hai."
+                )
+
+                if last_service:
+
+                    body += (
+                        f" Last visit "
+                        f"{last_service} ko tha."
+                    )
+
+                if slot_text:
+
+                    body += (
+                        f" Apke liye slots available hain: "
+                        f"{slot_text}."
+                    )
+
+                if offer_text:
+
+                    body += (
+                        f" {offer_text} bhi available hai."
+                    )
+
+                body += (
+                    " Reply 1 ya 2 karke slot choose karein, "
+                    "ya apna convenient time bata dein."
+                )
+
+            else:
+
+                body = (
+                    f"Hi {customer_name}, "
+                    f"{merchant_name} here. "
+                    f"Your {service_due.replace('_', ' ')} "
+                    f"recall is due."
+                )
+
+                if slot_text:
+
+                    body += (
+                        f" Available slots: {slot_text}."
+                    )
+
+                if offer_text:
+
+                    body += (
+                        f" {offer_text} is available."
+                    )
+
+                body += (
+                    " Reply with your preferred slot."
+                )
+
+            body = " ".join(
+                body.split()
             )
 
             return {
@@ -171,19 +276,21 @@ class Composer:
                     merchant_name,
                     service_due,
                     slot_text,
+                    offer_text,
                 ],
 
                 "facts": facts,
 
                 "rationale": (
-                    "Customer-scoped recall composed "
-                    "using customer identity, recall "
-                    "payload and available appointment slots."
+                    "Customer-scoped recall using "
+                    "customer identity, language preference, "
+                    "trigger recall data, available slots "
+                    "and active merchant offer when available."
                 ),
             }
 
         # ======================================================
-        # CUSTOMER-SCOPED GENERIC
+        # GENERIC CUSTOMER MESSAGE
         # ======================================================
 
         if customer:
@@ -193,15 +300,25 @@ class Composer:
                 "your customer"
             )
 
+            title = self._safe(
+                trigger.get("title"),
+                trigger_kind.replace(
+                    "_",
+                    " "
+                ).title()
+            )
+
+            description = self._safe(
+                trigger.get("description")
+            )
+
             body = (
                 f"Hi {merchant_name}, "
-                f"{title or trigger_kind.replace('_', ' ').title()}. "
+                f"{title}. "
             )
 
             if description:
-                body += (
-                    f"{description} "
-                )
+                body += f"{description} "
 
             body += (
                 f"This looks relevant for "
@@ -210,18 +327,38 @@ class Composer:
             )
 
         # ======================================================
-        # MERCHANT-SCOPED
+        # MERCHANT MESSAGE
         # ======================================================
 
         else:
 
+            title = self._safe(
+                trigger.get("title"),
+                trigger_kind.replace(
+                    "_",
+                    " "
+                ).title()
+            )
+
+            description = self._safe(
+                trigger.get("description")
+            )
+
+            owner_name = self._safe(
+                merchant.get("owner_first_name")
+            )
+
+            greeting = (
+                owner_name
+                or merchant_name
+            )
+
             body = (
-                f"Hi {merchant_name}, "
-                f"{title or trigger_kind.replace('_', ' ').title()}. "
+                f"{greeting}, "
+                f"{title}. "
             )
 
             if description:
-
                 body += (
                     f"{description} "
                 )

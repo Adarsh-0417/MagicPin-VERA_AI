@@ -41,20 +41,23 @@ class DecisionEngine:
             return False
 
         try:
+
             expiry = datetime.fromisoformat(
                 expires_at.replace("Z", "+00:00")
             )
 
-            if now:
-                current_time = datetime.fromisoformat(
+            current_time = (
+                datetime.fromisoformat(
                     now.replace("Z", "+00:00")
                 )
-            else:
-                current_time = datetime.now(timezone.utc)
+                if now
+                else datetime.now(timezone.utc)
+            )
 
             return current_time >= expiry
 
         except (ValueError, TypeError):
+
             return False
 
     def evaluate(
@@ -63,12 +66,17 @@ class DecisionEngine:
         now: Optional[str] = None
     ) -> DecisionResult:
 
+        # -----------------------------------------
+        # 1. TRIGGER EXISTS?
+        # -----------------------------------------
+
         trigger = self.store.get(
             "trigger",
             trigger_id
         )
 
         if trigger is None:
+
             return DecisionResult(
                 "wait",
                 "Trigger context is unavailable."
@@ -76,9 +84,9 @@ class DecisionEngine:
 
         payload = trigger.payload
 
-        # ---------------------------------------------------------
-        # 1. Suppression check
-        # ---------------------------------------------------------
+        # -----------------------------------------
+        # 2. SUPPRESSION CHECK
+        # -----------------------------------------
 
         suppression_key = payload.get(
             "suppression_key"
@@ -90,14 +98,15 @@ class DecisionEngine:
                 suppression_key
             )
         ):
+
             return DecisionResult(
                 "wait",
                 "Trigger is suppressed because the same suppression key was already used."
             )
 
-        # ---------------------------------------------------------
-        # 2. Expiry check
-        # ---------------------------------------------------------
+        # -----------------------------------------
+        # 3. EXPIRY CHECK
+        # -----------------------------------------
 
         expires_at = payload.get(
             "expires_at"
@@ -107,14 +116,15 @@ class DecisionEngine:
             expires_at,
             now
         ):
+
             return DecisionResult(
                 "wait",
                 f"Trigger expired at {expires_at}."
             )
 
-        # ---------------------------------------------------------
-        # 3. Resolve all required contexts
-        # ---------------------------------------------------------
+        # -----------------------------------------
+        # 4. RESOLVE ALL REQUIRED CONTEXTS
+        # -----------------------------------------
 
         try:
 
@@ -129,24 +139,69 @@ class DecisionEngine:
                 f"Required context unavailable: {exc}"
             )
 
-        # ---------------------------------------------------------
-        # 4. Customer validation
-        # ---------------------------------------------------------
+        # -----------------------------------------
+        # 5. CUSTOMER CONTEXT REQUIRED?
+        # -----------------------------------------
 
         customer_id = payload.get(
             "customer_id"
         )
 
-        if customer_id and context.customer is None:
+        if (
+            customer_id
+            and context.customer is None
+        ):
 
             return DecisionResult(
                 "wait",
                 "Trigger requires customer context, but the customer context is unavailable."
             )
 
-        # ---------------------------------------------------------
-        # 5. Explicit expiry flag
-        # ---------------------------------------------------------
+        # -----------------------------------------
+        # 6. CUSTOMER CONSENT / REMINDER OPT-IN
+        # -----------------------------------------
+
+        if (
+            customer_id
+            and context.customer
+        ):
+
+            customer_payload = (
+                context.customer.payload
+            )
+
+            preferences = customer_payload.get(
+                "preferences",
+                {}
+            )
+
+            consent = customer_payload.get(
+                "consent",
+                {}
+            )
+
+            reminder_opt_in = preferences.get(
+                "reminder_opt_in",
+                True
+            )
+
+            if reminder_opt_in is False:
+
+                return DecisionResult(
+                    "wait",
+                    "Customer has not opted in to reminders."
+                )
+
+            if not consent:
+
+                return DecisionResult(
+                    "wait",
+                    "Customer consent information is unavailable."
+                )
+
+        # -----------------------------------------
+        # 7. EXPLICITLY EXPIRED FLAG
+        # -----------------------------------------
 
         if payload.get("expired") is True:
 
@@ -155,12 +210,16 @@ class DecisionEngine:
                 "Trigger is explicitly expired."
             )
 
-        # ---------------------------------------------------------
-        # 6. Everything is valid
-        # ---------------------------------------------------------
+        # -----------------------------------------
+        # 8. EVERYTHING PASSED
+        # -----------------------------------------
 
         return DecisionResult(
             "send",
-            "Trigger is active, not suppressed, not expired, and all required contexts are available.",
+            (
+                "Trigger is active, not suppressed, "
+                "not expired, customer context and consent "
+                "requirements are satisfied."
+            ),
             context
         )

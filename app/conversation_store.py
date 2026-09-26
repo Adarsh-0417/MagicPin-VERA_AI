@@ -10,22 +10,20 @@ class ConversationState:
 
     last_trigger_id: Optional[str] = None
 
-    messages: List[dict] = field(
-        default_factory=list
-    )
+    messages: List[dict] = field(default_factory=list)
 
     ended: bool = False
-
     turn_count: int = 0
+
+    # Repeated incoming-message tracking
+    last_incoming_message: Optional[str] = None
+    same_incoming_count: int = 0
 
 
 class ConversationStore:
 
     def __init__(self):
-        self._conversations: Dict[
-            str,
-            ConversationState
-        ] = {}
+        self._conversations: Dict[str, ConversationState] = {}
 
     def get(
         self,
@@ -80,12 +78,34 @@ class ConversationStore:
             conversation_id
         )
 
-        conversation.messages.append({
-            "role": role,
-            "message": message
-        })
+        normalized = " ".join(
+            message.strip().lower().split()
+        )
+
+        # Track consecutive identical incoming messages
+        if role in {"merchant", "customer", "user"}:
+
+            if (
+                conversation.last_incoming_message
+                == normalized
+            ):
+                conversation.same_incoming_count += 1
+
+            else:
+
+                conversation.last_incoming_message = normalized
+                conversation.same_incoming_count = 1
+
+        conversation.messages.append(
+            {
+                "role": role,
+                "message": message
+            }
+        )
 
         conversation.turn_count += 1
+
+        return conversation
 
     def set_trigger(
         self,
