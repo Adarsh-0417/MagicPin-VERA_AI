@@ -3,7 +3,8 @@ from time import monotonic
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
-
+from pathlib import Path
+from app.dataset_loader import DatasetLoader
 from app.context_store import ContextStore
 from app.context_resolver import ContextResolver
 from app.models import (
