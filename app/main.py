@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
 from time import monotonic
 from uuid import uuid4
-
+from app.trigger_ranker import TriggerRanker
+from app.suppression import SuppressionLedger
+from app.decision_engine import DecisionEngine
 from fastapi import FastAPI, HTTPException
 from pathlib import Path
 from app.dataset_loader import DatasetLoader
@@ -39,6 +41,18 @@ START_TIME = monotonic()
 
 context_store = ContextStore()
 context_resolver = ContextResolver(context_store)
+
+suppression_ledger = SuppressionLedger()
+
+trigger_ranker = TriggerRanker(
+    context_store
+)
+
+decision_engine = DecisionEngine(
+    store=context_store,
+    resolver=context_resolver,
+    suppression=suppression_ledger,
+)
 
 # ============================================================
 # DATASET
@@ -228,42 +242,81 @@ def receive_context(context: ContextPayload):
 )
 def tick(request: TickRequest):
 
-    """
-    Periodic wake-up endpoint.
-
-    Current milestone:
-    - receives active trigger hints
-    - verifies trigger contexts exist
-    - does not proactively send messages yet
-
-    Decision engine will be connected here next.
-    """
+    ranked_triggers = trigger_ranker.rank(
+        request.available_triggers
+    )
 
     actions = []
 
-    for trigger_id in request.available_triggers:
+    # One proactive action per tick for now.
+    # We will refine this after testing against judge cases.
 
-        trigger = context_store.get(
-            "trigger",
-            trigger_id,
+    for trigger, score in ranked_triggers:
+
+        result = decision_engine.evaluate(
+            trigger.context_id
         )
 
-        if trigger is None:
+        if result.action != "send":
             continue
 
-        # ----------------------------------------------------
-        # No proactive action yet.
-        #
-        # Trigger ranking + suppression + decision engine
-        # will be inserted here.
-        # ----------------------------------------------------
+        context = result.context
 
-        continue
+        trigger_payload = context.trigger.payload
+        merchant_payload = context.merchant.payload
+
+        merchant_id = merchant_payload.get(
+            "merchant_id"
+        )
+
+        customer_id = trigger_payload.get(
+            "customer_id"
+        )
+
+        conversation_id = (
+            f"conv_{trigger.context_id}"
+        )
+
+        action = Action(
+            conversation_id=conversation_id,
+            merchant_id=merchant_id,
+            customer_id=customer_id,
+            send_as=(
+                "merchant_on_behalf"
+                if customer_id
+                else "vera"
+            ),
+            trigger_id=trigger.context_id,
+            template_name=None,
+            template_params=[],
+            body="",
+            cta="open_ended",
+            suppression_key=trigger_payload.get(
+                "suppression_key"
+            ),
+            rationale=(
+                f"{result.rationale} "
+                f"Trigger score={score:.2f}."
+            ),
+        )
+
+        actions.append(action)
+
+        # Record suppression immediately after selection.
+        suppression_key = trigger_payload.get(
+            "suppression_key"
+        )
+
+        if suppression_key:
+            suppression_ledger.mark_sent(
+                suppression_key
+            )
+
+        break
 
     return TickResponse(
-        actions=actions,
+        actions=actions
     )
-
 
 # ============================================================
 # REPLY
