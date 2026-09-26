@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from time import monotonic
 from uuid import uuid4
+from app.conversation_store import ConversationStore
+from app.reply_fsm import ReplyFSM
 from app.reply_fsm import ReplyFSM
 from app.composer import Composer
 from app.validator import ActionValidator
@@ -55,6 +57,9 @@ reply_fsm = ReplyFSM()
 trigger_ranker = TriggerRanker(
     context_store
 )
+
+conversation_store = ConversationStore()
+reply_fsm = ReplyFSM()
 
 decision_engine = DecisionEngine(
     store=context_store,
@@ -322,6 +327,17 @@ def tick(request: TickRequest):
 
         actions.append(action)
 
+        conversation_store.get_or_create(
+            conversation_id=conversation_id,
+            merchant_id=merchant_id,
+            customer_id=customer_id
+        )
+
+        conversation_store.set_trigger(
+            conversation_id=conversation_id,
+            trigger_id=trigger.context_id
+        )
+
         suppression_key = trigger_payload.get(
             "suppression_key"
         )
@@ -342,10 +358,28 @@ def tick(request: TickRequest):
 @app.post("/v1/reply", response_model=ReplyResponse)
 def reply(request: ReplyRequest):
 
+    conversation = conversation_store.get_or_create(
+        conversation_id=request.conversation_id,
+        merchant_id=request.merchant_id,
+        customer_id=request.customer_id
+    )
+
     decision = reply_fsm.evaluate(
         message=request.message,
-        turn_number=request.turn_number
+        conversation=conversation
     )
+
+    conversation_store.add_message(
+        conversation_id=request.conversation_id,
+        role=request.from_role,
+        message=request.message
+    )
+
+    if decision.action == "end":
+
+        conversation_store.end(
+            request.conversation_id
+        )
 
     return ReplyResponse(
         action=decision.action,
@@ -354,7 +388,6 @@ def reply(request: ReplyRequest):
         wait_seconds=decision.wait_seconds,
         rationale=decision.rationale,
     )
-
 # ============================================================
 # ROOT
 # ============================================================

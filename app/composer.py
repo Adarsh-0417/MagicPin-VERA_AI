@@ -2,7 +2,7 @@ from app.context_resolver import CompositionContext
 from app.facts import FactsExtractor
 from app.playbooks import (
     get_category_playbook,
-    get_trigger_playbook
+    get_trigger_playbook,
 )
 
 
@@ -10,6 +10,16 @@ class Composer:
 
     def __init__(self):
         self.facts_extractor = FactsExtractor()
+
+    def _safe(
+        self,
+        value,
+        fallback=""
+    ):
+        if value is None:
+            return fallback
+
+        return str(value).strip()
 
     def compose(
         self,
@@ -25,37 +35,35 @@ class Composer:
         trigger = facts["trigger"]
         customer = facts.get("customer")
 
-        category_slug = (
-            category.get("slug")
-            or "business"
+        category_slug = self._safe(
+            category.get("slug"),
+            "business"
         )
 
-        category_name = (
-            category.get("name")
-            or category_slug
+        category_name = self._safe(
+            category.get("name"),
+            category_slug
         )
 
-        merchant_name = (
-            merchant.get("name")
-            or "there"
+        merchant_name = self._safe(
+            merchant.get("name"),
+            "there"
         )
 
-        trigger_kind = (
-            trigger.get("kind")
-            or "general_update"
+        trigger_kind = self._safe(
+            trigger.get("kind"),
+            "general_update"
         )
 
-        trigger_title = (
+        title = self._safe(
             trigger.get("title")
-            or trigger_kind.replace("_", " ").title()
         )
 
-        trigger_description = (
+        description = self._safe(
             trigger.get("description")
-            or ""
-        ).strip()
+        )
 
-        category_playbook = get_category_playbook(
+        playbook = get_category_playbook(
             category_slug
         )
 
@@ -63,60 +71,175 @@ class Composer:
             trigger_kind
         )
 
-        # ---------------------------------------------------------
-        # Customer-specific message
-        # ---------------------------------------------------------
+        # ======================================================
+        # CUSTOMER-SCOPED RECALL
+        # ======================================================
+
+        if (
+            customer
+            and trigger_kind == "recall_due"
+        ):
+
+            customer_name = self._safe(
+                customer.get("name"),
+                "there"
+            )
+
+            last_service = self._safe(
+                trigger.get(
+                    "last_service_date"
+                )
+                or customer.get(
+                    "last_visit"
+                )
+            )
+
+            service_due = self._safe(
+                trigger.get(
+                    "service_due"
+                ),
+                "scheduled service"
+            )
+
+            slots = trigger.get(
+                "available_slots",
+                []
+            )
+
+            slot_text = ""
+
+            if slots:
+
+                labels = []
+
+                for slot in slots[:2]:
+
+                    if isinstance(
+                        slot,
+                        dict
+                    ):
+
+                        label = slot.get(
+                            "label"
+                        )
+
+                        if label:
+                            labels.append(
+                                label
+                            )
+
+                if labels:
+
+                    slot_text = (
+                        " Available slots: "
+                        + " or ".join(labels)
+                        + "."
+                    )
+
+            body = (
+                f"Hi {customer_name}, "
+                f"{merchant_name}'s clinic here. "
+                f"Your {service_due.replace('_', ' ')} "
+                f"is due."
+            )
+
+            if last_service:
+
+                body += (
+                    f" Your last service was "
+                    f"{last_service}."
+                )
+
+            body += slot_text
+
+            body += (
+                " Reply with the slot that works "
+                "for you, or tell us a convenient time."
+            )
+
+            return {
+                "body": body,
+
+                "cta": "multi_choice_slot",
+
+                "template_name": (
+                    "merchant_recall_reminder_v1"
+                ),
+
+                "template_params": [
+                    customer_name,
+                    merchant_name,
+                    service_due,
+                    slot_text,
+                ],
+
+                "facts": facts,
+
+                "rationale": (
+                    "Customer-scoped recall composed "
+                    "using customer identity, recall "
+                    "payload and available appointment slots."
+                ),
+            }
+
+        # ======================================================
+        # CUSTOMER-SCOPED GENERIC
+        # ======================================================
 
         if customer:
 
-            customer_name = (
-                customer.get("name")
-                or "your customer"
+            customer_name = self._safe(
+                customer.get("name"),
+                "your customer"
             )
 
             body = (
                 f"Hi {merchant_name}, "
-                f"quick update about {customer_name}. "
-                f"{trigger_title}: "
+                f"{title or trigger_kind.replace('_', ' ').title()}. "
             )
 
-            if trigger_description:
+            if description:
                 body += (
-                    f"{trigger_description} "
+                    f"{description} "
                 )
 
             body += (
-                "This could be a useful opportunity "
-                "to reconnect. Would you like to explore "
-                "a next step?"
+                f"This looks relevant for "
+                f"{customer_name}. "
+                f"Would you like to explore this?"
             )
 
-        # ---------------------------------------------------------
-        # Merchant-only message
-        # ---------------------------------------------------------
+        # ======================================================
+        # MERCHANT-SCOPED
+        # ======================================================
 
         else:
 
             body = (
                 f"Hi {merchant_name}, "
-                f"quick update: {trigger_title}. "
+                f"{title or trigger_kind.replace('_', ' ').title()}. "
             )
 
-            if trigger_description:
+            if description:
+
                 body += (
-                    f"{trigger_description} "
+                    f"{description} "
                 )
 
             body += (
-                f"This looks relevant for your "
+                f"This looks relevant to your "
                 f"{category_name.lower()} business. "
                 f"Would you like to explore a next step?"
             )
 
-        return {
-            "body": body.strip(),
+        body = " ".join(
+            body.split()
+        )
 
-            "cta": category_playbook.get(
+        return {
+            "body": body,
+
+            "cta": playbook.get(
                 "cta",
                 "Reply to discuss"
             ),
@@ -128,10 +251,11 @@ class Composer:
             "facts": facts,
 
             "rationale": (
-                f"Composed for category="
-                f"{category_slug}, "
-                f"trigger={trigger_kind}. "
+                f"Message composed using "
+                f"category={category_slug}, "
+                f"trigger={trigger_kind}, "
+                f"customer_context={bool(customer)}. "
                 f"Goal: "
                 f"{trigger_playbook['goal']}."
-            )
+            ),
         }
