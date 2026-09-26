@@ -7,7 +7,7 @@
 ---
 
 ## Why this exists
-
+  
 The current engagement loop (`agents/vera/followup/`) is a collection of ad-hoc nudges — campaign templates, performance reminders, conversation requeues. Each was built point-to-point, with hardcoded assumptions baked in. Adding a new nudge type means re-writing prompts, finding new data, and re-implementing send/dedup logic.
 
 Two problems this creates:

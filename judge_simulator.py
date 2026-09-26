@@ -11,7 +11,7 @@ HOW TO USE:
 3. Set your bot URL
 4. Run: python judge_simulator.py
 
-That's it!
+That's it!   
 
 Author: magicpin AI Challenge Team
 """

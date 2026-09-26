@@ -6,7 +6,7 @@
 
 > **Read this with `challenge-brief.md`** — that brief defines what the bot must do (the 4-context framework, composition contract, evaluation rubric). This brief defines *how the bot is tested* (HTTP API, judge harness, scoring touchpoints).
 
----
+---  
 
 ## 1. The high-level model
 

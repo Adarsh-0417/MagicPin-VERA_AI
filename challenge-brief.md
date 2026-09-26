@@ -7,11 +7,11 @@
 > **Read me first** — this document is fully self-contained. A reader (human or LLM) starting cold should be able to understand the company, the product, the challenge, the framework, the dataset, and the evaluation rubric without needing any other reference.
 
 ---
-
+  
 ## 1. The challenge in one sentence
 
 > Build an AI chatbot that engages and assists merchants on WhatsApp the way **Vera** (magicpin's merchant-AI assistant) does — but better. Same base dataset for every participant. AI judges the outcome.
-
+  
 ---
 
 ## 2. About magicpin (background, ~30 sec read)

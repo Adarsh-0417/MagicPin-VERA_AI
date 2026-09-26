@@ -7,7 +7,7 @@
 ---
 
 ## TL;DR
-
+  
 Two distinct paths exist today — **merchant-facing** (Vera ↔ Dr. Meera) and **customer-facing** (a customer asks Vera *about* Dr. Meera). They share infrastructure (vera-mcp + merchant-support-mcp + Redis) but compose context very differently.
 
 Most of what the proposed `MerchantContext` needs **already exists in scattered form** (`_merchant_snapshot`, `_behavioral_profile`, `_session_scenario`). The genuinely new pieces are:
