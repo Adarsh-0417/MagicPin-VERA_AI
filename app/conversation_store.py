@@ -105,7 +105,11 @@ class ConversationStore:
     def delete(self, conversation_id: str):
         self._conversations.pop(conversation_id, None)
 
-        def record_auto_reply(self, merchant_id: str, message: str) -> int:
+        def record_auto_reply(
+            self,
+            merchant_id: str | None,
+            message: str
+        ) -> int:
             """
             Track repeated auto-replies independently of conversation_id.
 
