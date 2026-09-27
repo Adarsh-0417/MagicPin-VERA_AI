@@ -1,6 +1,9 @@
 import os
 import json
 
+from dotenv import load_dotenv
+
+load_dotenv()
 from google import genai
 from google.genai import types
 
@@ -11,7 +14,7 @@ class LLMReplyIntent:
         self.api_key = os.getenv("GEMINI_API_KEY")
         self.model = os.getenv(
             "LLM_MODEL",
-            "gemini-2.5-flash"
+            "gemini-3.8-flash"
         )
 
         print(
