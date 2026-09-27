@@ -402,44 +402,72 @@ def tick(request: TickRequest):
 # REPLY
 # ============================================================
 
-@app.post(
-    "/v1/reply",
-    response_model=ReplyResponse
-)
-def reply(request: ReplyRequest):
+@app.post("/v1/reply")
+async def reply(body: ReplyBody):
+
+    # ---------------------------------------------------------
+    # GET EXISTING CONVERSATION OR CREATE IT ON FIRST TURN
+    # ---------------------------------------------------------
 
     conversation = conversation_store.get_or_create(
-        conversation_id=request.conversation_id,
-        merchant_id=request.merchant_id,
-        customer_id=request.customer_id
+        conversation_id=body.conversation_id,
+        merchant_id=body.merchant_id,
+        customer_id=body.customer_id,
     )
 
-    # Store incoming message BEFORE FSM evaluation
-    # so repeated-message detection sees the current turn.
-    conversation = conversation_store.add_message(
-        conversation_id=request.conversation_id,
-        role=request.from_role,
-        message=request.message
+    # Keep latest IDs available
+    if body.merchant_id:
+        conversation.merchant_id = body.merchant_id
+
+    if body.customer_id:
+        conversation.customer_id = body.customer_id
+
+    # ---------------------------------------------------------
+    # STORE MERCHANT MESSAGE BEFORE FSM EVALUATION
+    # ---------------------------------------------------------
+
+    conversation.add_message(
+        role=body.from_role,
+        content=body.message,
     )
+
+    # ---------------------------------------------------------
+    # RUN REPLY FSM
+    # ---------------------------------------------------------
 
     decision = reply_fsm.evaluate(
-        message=request.message,
-        conversation=conversation
+        message=body.message,
+        conversation=conversation,
     )
+
+    # ---------------------------------------------------------
+    # UPDATE CONVERSATION STATE
+    # ---------------------------------------------------------
 
     if decision.action == "end":
+        conversation.ended = True
 
-        conversation_store.end(
-            request.conversation_id
-        )
+    conversation_store.save(conversation)
 
-    return ReplyResponse(
-        action=decision.action,
-        body=decision.body,
-        cta=decision.cta,
-        wait_seconds=decision.wait_seconds,
-        rationale=decision.rationale
-    )
+    # ---------------------------------------------------------
+    # BUILD RESPONSE
+    # ---------------------------------------------------------
+
+    response = {
+        "action": decision.action,
+        "rationale": decision.rationale,
+    }
+
+    if decision.body:
+        response["body"] = decision.body
+
+    if decision.cta:
+        response["cta"] = decision.cta
+
+    if decision.wait_seconds is not None:
+        response["wait_seconds"] = decision.wait_seconds
+
+    return response
 # ============================================================
 # ROOT
 # ============================================================
