@@ -128,7 +128,7 @@ LLM_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 
 
-LLM_MODEL = "gemini-3.5-flash"
+LLM_MODEL = "gemini-3.5-flash-lite"
 
 
 
