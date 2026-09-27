@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from email.mime import message
 from typing import Optional
 
 
@@ -104,5 +105,28 @@ class ConversationStore:
     def delete(self, conversation_id: str):
         self._conversations.pop(conversation_id, None)
 
+        def record_auto_reply(self, merchant_id: str, message: str) -> int:
+            """
+            Track repeated auto-replies independently of conversation_id.
+
+            The judge may send repeated auto-replies using different
+            conversation IDs, so conversation-local state is not enough.
+            """
+
+        normalized = " ".join(
+            (message or "").strip().lower().split()
+        )
+
+        key = (
+            merchant_id or "unknown_merchant",
+            normalized,
+        )
+
+        count = self._auto_reply_counts.get(key, 0) + 1
+        self._auto_reply_counts[key] = count
+
+        return count
+
     def clear(self):
         self._conversations.clear()
+        self._auto_reply_counts.clear()

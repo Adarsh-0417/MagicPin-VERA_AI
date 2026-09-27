@@ -440,7 +440,17 @@ async def reply(body: ReplyBody):
         role=body.from_role,
         content=body.message,
     )
+    # ---------------------------------------------------------
+    # GLOBAL AUTO-REPLY TRACKING
+    # ---------------------------------------------------------
 
+    if reply_fsm._looks_like_auto_reply(body.message):
+        conversation.same_incoming_count = (
+            conversation_store.record_auto_reply(
+                merchant_id=body.merchant_id,
+                message=body.message,
+            )
+        )
     # ---------------------------------------------------------
     # RUN REPLY FSM
     # ---------------------------------------------------------
