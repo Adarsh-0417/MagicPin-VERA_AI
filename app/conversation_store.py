@@ -125,6 +125,19 @@ class ConversationStore:
 
         return count
 
+    def set_trigger(
+        self,
+        conversation_id: str,
+        trigger_id: str
+    ):
+        conversation = self._conversations.get(conversation_id)
+
+        if conversation is None:
+            return
+
+        conversation.last_trigger_id = trigger_id
+        self._conversations[conversation_id] = conversation
+
     def clear(self):
         self._conversations.clear()
         self._auto_reply_counts.clear()
