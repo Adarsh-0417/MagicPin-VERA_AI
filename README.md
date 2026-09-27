@@ -4,11 +4,7 @@
 
 ### 🌐 Live Production Deployment
 
-- **Live Service:** https://magicpin-vera29.onrender.com
-- **Dashboard:** https://magicpin-vera29.onrender.com/
-- **Swagger Docs:** https://magicpin-vera29.onrender.com/docs
-- **Health Check:** https://magicpin-vera29.onrender.com/v1/healthz
-- **Metadata:** https://magicpin-vera29.onrender.com/v1/metadata
+- **Live Service:** https://magicpin-vera-ai-guml.onrender.com
 
 ---
 
