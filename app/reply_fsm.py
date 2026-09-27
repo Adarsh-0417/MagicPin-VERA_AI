@@ -422,83 +422,38 @@ Return ONLY JSON:
     # --------------------------------------------------------
 
     def _fallback_positive(self, conversation=None):
-        """
-        Positive intent means the merchant has already committed.
-        Never send them back into qualification mode.
-        """
+        trigger_id = (
+            getattr(conversation, "last_trigger_id", None)
+            if conversation
+            else None
+        )
 
-    trigger_id = (
-        getattr(conversation, "last_trigger_id", None)
-        if conversation
-        else None
-    )
+        if trigger_id:
+            return ReplyDecision(
+                "send",
+                body=(
+                    "Done. I'll take this forward and move to the "
+                    "next step for this request."
+                ),
+                cta="next_step",
+                rationale=(
+                    "Merchant explicitly committed to proceed. "
+                    "Moved directly to action mode."
+                )
+            )
 
-    if trigger_id:
         return ReplyDecision(
             "send",
             body=(
-                "Done. I’ll take this forward and move to the "
-                "next step for this request."
+                "Done. I'll take this forward and move to the "
+                "next concrete step."
             ),
             cta="next_step",
             rationale=(
                 "Merchant explicitly committed to proceed. "
-                "Moved directly to action mode."
+                "Skipped further qualification."
             )
         )
-
-    return ReplyDecision(
-        "send",
-        body=(
-            "Done. I’ll take this forward and move to the "
-            "next concrete step."
-        ),
-        cta="next_step",
-        rationale=(
-            "Merchant explicitly committed to proceed. "
-            "Skipped further qualification."
-        )
-    )
-
-    # --------------------------------------------------------
-    # MAIN EVALUATOR
-    # --------------------------------------------------------
-
-    def evaluate(
-        self,
-        message,
-        conversation=None
-    ):
-
-        text = message.strip().lower()
-
-        # ====================================================
-        # EMPTY
-        # ====================================================
-
-        if not text:
-
-            return ReplyDecision(
-                "wait",
-                wait_seconds=1800,
-                rationale="Empty message received."
-            )
-
-        # ====================================================
-        # ALREADY ENDED
-        # ====================================================
-
-        if (
-            conversation
-            and conversation.ended
-        ):
-
-            return ReplyDecision(
-                "end",
-                rationale=(
-                    "Conversation has already been ended."
-                )
-            )
 
         # ====================================================
         # AUTO-REPLY
