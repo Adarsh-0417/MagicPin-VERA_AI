@@ -2,6 +2,8 @@ from dataclasses import dataclass, field
 from email.mime import message
 from typing import Optional
 
+from polars import count
+
 
 @dataclass
 class ConversationMessage:
@@ -62,6 +64,7 @@ class ConversationStore:
 
     def __init__(self):
         self._conversations = {}
+        self._auto_reply_counts = {}
 
     def get(self, conversation_id: str):
         return self._conversations.get(conversation_id)
@@ -110,24 +113,18 @@ class ConversationStore:
             merchant_id: str | None,
             message: str
         ) -> int:
-            """
-            Track repeated auto-replies independently of conversation_id.
 
-            The judge may send repeated auto-replies using different
-            conversation IDs, so conversation-local state is not enough.
-            """
+            normalized = " ".join(
+                (message or "").strip().lower().split()
+            )
 
-        normalized = " ".join(
-            (message or "").strip().lower().split()
-        )
+            key = (
+                merchant_id or "unknown_merchant",
+                normalized,
+            )
 
-        key = (
-            merchant_id or "unknown_merchant",
-            normalized,
-        )
-
-        count = self._auto_reply_counts.get(key, 0) + 1
-        self._auto_reply_counts[key] = count
+            count = self._auto_reply_counts.get(key, 0) + 1
+            self._auto_reply_counts[key] = count
 
         return count
 
