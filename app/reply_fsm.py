@@ -421,42 +421,44 @@ Return ONLY JSON:
     # RULE-BASED FALLBACK
     # --------------------------------------------------------
 
-    def _fallback_positive(
-        self,
-        conversation=None
-    ):
+    def _fallback_positive(self, conversation=None):
+        """
+        Positive intent means the merchant has already committed.
+        Never send them back into qualification mode.
+        """
 
-        if (
-            conversation
-            and getattr(
-                conversation,
-                "last_trigger_id",
-                None
-            )
-        ):
+    trigger_id = (
+        getattr(conversation, "last_trigger_id", None)
+        if conversation
+        else None
+    )
 
-            return ReplyDecision(
-                "send",
-                body=(
-                    "Absolutely. Let's take this forward. "
-                    "I can help you with the next step."
-                ),
-                cta="next_step",
-                rationale=(
-                    "Positive intent detected with an active "
-                    "trigger context."
-                )
-            )
-
+    if trigger_id:
         return ReplyDecision(
             "send",
             body=(
-                "Absolutely. I can help with that. "
-                "What would you like to explore?"
+                "Done. I’ll take this forward and move to the "
+                "next step for this request."
             ),
             cta="next_step",
-            rationale="Positive intent detected."
+            rationale=(
+                "Merchant explicitly committed to proceed. "
+                "Moved directly to action mode."
+            )
         )
+
+    return ReplyDecision(
+        "send",
+        body=(
+            "Done. I’ll take this forward and move to the "
+            "next concrete step."
+        ),
+        cta="next_step",
+        rationale=(
+            "Merchant explicitly committed to proceed. "
+            "Skipped further qualification."
+        )
+    )
 
     # --------------------------------------------------------
     # MAIN EVALUATOR
