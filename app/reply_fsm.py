@@ -455,6 +455,161 @@ Return ONLY JSON:
             )
         )
 
+
+
+
+    # --------------------------------------------------------
+    # MAIN EVALUATOR
+    # --------------------------------------------------------
+
+    def evaluate(self, message, conversation=None):
+        text = message.strip().lower()
+
+        # ====================================================
+        # EMPTY
+        # ====================================================
+
+        if not text:
+            return ReplyDecision(
+                "wait",
+                wait_seconds=1800,
+                rationale="Empty message received."
+            )
+
+        # ====================================================
+        # ALREADY ENDED
+        # ====================================================
+
+        if conversation and conversation.ended:
+            return ReplyDecision(
+                "end",
+                rationale="Conversation has already been ended."
+            )
+
+        # ====================================================
+        # AUTO REPLY
+        # ====================================================
+
+        if self._looks_like_auto_reply(text):
+
+            repeat_count = (
+                conversation.same_incoming_count
+                if conversation
+                else 1
+            )
+
+            # First auto reply
+            if repeat_count == 1:
+                return ReplyDecision(
+                    "send",
+                    body=(
+                        "Looks like an auto-reply 😊 "
+                        "When the owner sees this, just reply "
+                        "'Yes' for the update."
+                    ),
+                    cta="yes_no",
+                    rationale=(
+                        "Detected an automated response. "
+                        "Sent one gentle follow-up."
+                    )
+                )
+
+            # Second auto reply
+            if repeat_count == 2:
+                return ReplyDecision(
+                    "wait",
+                    wait_seconds=86400,
+                    rationale=(
+                        "Repeated auto-reply detected. "
+                        "Waiting before another contact."
+                    )
+                )
+
+            # Third or later
+            return ReplyDecision(
+                "end",
+                rationale=(
+                    "Repeated automated responses detected. "
+                    "Conversation ended to avoid message pollution."
+                )
+            )
+
+        # ====================================================
+        # EXPLICIT OPT-OUT
+        # ====================================================
+
+        for phrase in self.OPT_OUT_PHRASES:
+            if phrase in text:
+                return ReplyDecision(
+                    "end",
+                    rationale=(
+                        "Explicit opt-out detected. "
+                        "No further messages should be sent."
+                    )
+                )
+
+        # ====================================================
+        # NEGATIVE INTENT
+        # ====================================================
+
+        for phrase in self.NEGATIVE_PHRASES:
+            if phrase in text:
+                return ReplyDecision(
+                    "wait",
+                    wait_seconds=86400,
+                    rationale=(
+                        "Negative intent detected without "
+                        "explicit opt-out. Conversation paused."
+                    )
+                )
+
+        # ====================================================
+        # POSITIVE / COMMITMENT
+        # ====================================================
+
+        for phrase in self.POSITIVE_PHRASES:
+            if phrase in text:
+                return self._fallback_positive(conversation)
+
+        # ====================================================
+        # QUESTION
+        # ====================================================
+
+        words = set(
+            text.replace("?", "").split()
+        )
+
+        if (
+            "?" in text
+            or words.intersection(self.QUESTION_WORDS)
+        ):
+            return ReplyDecision(
+                "send",
+                body=(
+                    "Happy to explain. Tell me which part "
+                    "you'd like more details on, and I'll "
+                    "keep it specific to your business."
+                ),
+                cta="continue",
+                rationale=(
+                    "Information-seeking intent detected "
+                    "by deterministic fallback."
+                )
+            )
+
+        # ====================================================
+        # AMBIGUOUS
+        # ====================================================
+
+        return ReplyDecision(
+            "wait",
+            wait_seconds=1800,
+            rationale=(
+                "Intent was ambiguous. Waiting instead of "
+                "sending an unnecessary message."
+            )
+        )
+
         # ====================================================
         # AUTO-REPLY
         #
