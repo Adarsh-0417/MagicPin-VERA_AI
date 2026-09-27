@@ -135,7 +135,7 @@ Auto Reply #3+ → END
 
 Swagger:
 
-**https://magicpin-vera29.onrender.com/docs**
+**https://magicpin-vera-ai-guml.onrender.com/docs**
 
 ---
 
