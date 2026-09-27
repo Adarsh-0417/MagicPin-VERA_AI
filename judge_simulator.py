@@ -151,13 +151,13 @@ OLLAMA_URL = "http://localhost:11434"
 # Which test to run by default
 
 
-
 TEST_SCENARIO = "all"
 
 
 
 
 
+TEST_SCENARIO = "full_evaluation"
 
 
 # =============================================================================
