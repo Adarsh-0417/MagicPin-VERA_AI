@@ -2,8 +2,6 @@ from dataclasses import dataclass, field
 from email.mime import message
 from typing import Optional
 
-from polars import count
-
 
 @dataclass
 class ConversationMessage:
