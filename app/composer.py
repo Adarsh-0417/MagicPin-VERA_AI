@@ -1,5 +1,6 @@
 from app.context_resolver import CompositionContext
 from app.facts import FactsExtractor
+from app.llm_composer import LLMComposer
 from app.playbooks import (
     get_category_playbook,
     get_trigger_playbook
