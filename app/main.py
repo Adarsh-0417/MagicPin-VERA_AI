@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from time import monotonic
+from pydantic import BaseModel
 from uuid import uuid4
 from app.conversation_store import ConversationStore
 from app.reply_fsm import ReplyFSM
@@ -401,6 +402,15 @@ def tick(request: TickRequest):
 # ============================================================
 # REPLY
 # ============================================================
+
+class ReplyBody(BaseModel):
+    conversation_id: str
+    merchant_id: str | None = None
+    customer_id: str | None = None
+    from_role: str
+    message: str
+    received_at: str
+    turn_number: int
 
 @app.post("/v1/reply")
 async def reply(body: ReplyBody):
