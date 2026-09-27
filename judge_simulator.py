@@ -1,96 +1,36 @@
 #!/usr/bin/env python3
-
 import os
 
-
-
 """
-
-
 
 magicpin AI Challenge — LLM-Powered Judge Simulator
 
-
-
 ====================================================
-
-
-
-
-
-
 
 A strict but fair judge that scores your bot and explains WHY.
 
-
-
-
-
-
-
 HOW TO USE:
-
-
 
 1. Edit the CONFIGURATION section below (lines 25-45)
 
-
-
 2. Set your LLM provider and API key
-
-
 
 3. Set your bot URL
 
-
-
 4. Run: python judge_simulator.py
-
-
-
-
-
-
-
 That's it!   
-
-
-
-
-
-
 
 Author: magicpin AI Challenge Team
 
-
-
 """
 
-
-
-
-
-
-
 # =============================================================================
-
-
 
 # ██████  CONFIGURATION - EDIT THIS SECTION ██████
 
-
-
 # =============================================================================
 
-
-
-
-
-
-
 # Your bot's URL (where your bot is running)
-
-
 
 BOT_URL = "https://magicpin-vera-ai-guml.onrender.com"
 
@@ -128,7 +68,7 @@ LLM_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 
 
-LLM_MODEL = "gemini-3.5-flash"
+LLM_MODEL = "gemini-3.5-flash-lite"
 
 
 
