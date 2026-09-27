@@ -11,124 +11,51 @@ from app.playbooks import (
     get_trigger_playbook
 
 )
-
-
-
-
-
 llm_composer = LLMComposer()
-
-
 class Composer:
-
     def __init__(self):
-
         self.facts_extractor = FactsExtractor()
-
-
-
     def _safe(
-
         self,
-
         value,
-
         fallback=""
-
     ):
-
         if value is None:
-
             return fallback
-
-
-
         return str(value).strip()
-
-
-
     def _active_offer(
-
         self,
-
         merchant
-
     ):
-
         offers = merchant.get(
-
             "offers",
-
             []
-
         )
-
-
-
         for offer in offers:
-
-
-
             if not isinstance(
-
                 offer,
-
                 dict
-
             ):
-
                 continue
-
-
-
             status = str(
-
                 offer.get(
-
                     "status",
-
                     ""
-
                 )
-
             ).lower()
-
-
-
             if status == "active":
-
                 return offer
-
-
-
         return None
-
-
-
     def _offer_text(
-
         self,
-
         offer
-
     ):
-
         if not offer:
-
             return ""
-
-
-
         title = (
-
             offer.get("title")
-
             or offer.get("name")
-
         )
-
-
-
         price = offer.get(
 
             "price"
