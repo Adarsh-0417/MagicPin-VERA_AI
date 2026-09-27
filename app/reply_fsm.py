@@ -1,3 +1,7 @@
+from app.llm_reply import LLMReplyIntent
+
+llm_reply = LLMReplyIntent()
+
 class ReplyDecision:
 
     def __init__(
